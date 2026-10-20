@@ -1,4 +1,0 @@
-name = "did-you-eat"
-compatibility_date = "2026-10-20"
-[assets]
-directory = "./public"  # or "./site", whatever your folder is named
