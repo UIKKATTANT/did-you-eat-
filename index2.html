@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ec438d">
+<title>DIDYOU — Did you eat today?</title>
+<style>
+:root{color-scheme:light;--pink:#d75582;--deep:#8e3654}
+*{box-sizing:border-box}
+/* WALLPAPER: keep hellow.jpg beside index.html. */
+html{min-height:100%;background:#faedf1 url('hellow.jpg') center / cover fixed no-repeat}
+body{margin:0;min-height:100vh;min-height:100svh;display:grid;place-items:center;padding:32px 24px;font-family:Georgia,'Times New Roman',serif;color:#613345;background:rgba(255,247,250,.64)}
+.card{width:min(100%,390px);text-align:center;transition:opacity .8s}
+h1{font:500 11px Arial,sans-serif;letter-spacing:5px;margin:0 0 36px;color:#875465}
+h2{font-size:clamp(29px,8vw,36px);font-weight:400;line-height:1.2;margin:26px 0 30px;letter-spacing:-.8px}
+.frame{margin:0 auto;width:100%;padding:0}
+.frame img{display:block;width:100%;height:220px;object-fit:contain;border:0}
+.asset-note{font:13px/1.6 Arial,sans-serif;color:#875465;margin:12px 0}
+.buttons{display:flex;justify-content:center;gap:14px;margin:0 0 24px}
+button{cursor:pointer;font:500 13px Arial,sans-serif;letter-spacing:1px;transition:background .18s,transform .18s,opacity .18s}
+.answer{width:124px;min-height:46px;border:0;border-radius:5px;color:white;background:#bd5277}
+.answer.no{color:#914361;background:rgba(255,255,255,.7)}
+.answer:hover:not(:disabled){background:#a94366;color:white}
+button:active:not(:disabled){transform:translateY(2px)}
+button:focus-visible{outline:2px solid #8e3654;outline-offset:5px}
+button:disabled{cursor:default;opacity:.5}
+.feedback{display:block;margin:auto;padding:0;min-height:28px;border:0;background:none;color:#a64569;font:400 25px Georgia,serif;letter-spacing:1px}
+.feedback:disabled{opacity:1}
+.status{font:12px/1.7 Arial,sans-serif;color:#875465;min-height:40px;max-width:300px;margin:14px auto 0;overflow-wrap:anywhere}
+.privacy{font:700 13px/1.6 Arial,sans-serif;color:#8e3654;margin:28px 0 0;text-decoration:underline;text-decoration-color:#e7a3bc;text-decoration-thickness:4px;text-underline-offset:4px}
+.retry{margin:8px 0 0;padding:8px 0;border:0;border-bottom:1px solid #bd5277;background:none;color:#914361;font-size:12px}
+[hidden]{display:none!important}
+body.finished .card{opacity:.55}
+@media(max-width:380px){body{padding:24px 20px}h1{margin-bottom:28px}.frame img{height:200px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="card" aria-labelledby="title">
+<h1 id="title">DIDYOU</h1>
+<!-- QUESTION IMAGE: DIDYOU.jpg; response filenames are in ASSETS below. -->
+<figure class="frame">
+<img id="picture" src="DIDYOU.jpg" alt="A little reminder: did you eat today?">
+<figcaption id="asset-note" class="asset-note" hidden></figcaption>
+</figure>
+<h2>Did you eat today?</h2>
+<div class="buttons" aria-label="Your answer">
+<button class="answer" type="button" data-answer="YES">YES</button>
+<button class="answer no" type="button" data-answer="NO">NO</button>
+</div>
+<button id="feedback" class="feedback" type="button" aria-label="Reset question">—</button>
+<p id="status" class="status" role="status" aria-live="polite"></p>
+<button id="retry" class="retry" type="button" hidden>Retry sending</button>
+<p class="privacy">I can see your response.</p>
+</main>
+<!--
+FORM ENDPOINT: replace YOUR_FORM_ID in the action below with your own ID.
+The hidden POST form contains answer and timestamp. JavaScript submits its
+FormData using fetch so it can wait for a confirmed response before closing.
+Formspree supports this AJAX pattern. Getform, Web3Forms, Apps Script or a
+PHP/Node endpoint can also be used if they accept POST FormData and support
+cross-origin (CORS) requests from your site. Adapt their success checks below.
+Web3Forms also requires its public access_key field. Never embed secret keys.
+An opaque no-cors response cannot confirm saving; do not treat it as success.
+Serve via HTTP(S); local file:// testing may be rejected by the endpoint.
+-->
+<form id="response-form" action="https://formspree.io/f/xgaojvgd" method="POST" hidden>
+<input type="hidden" name="answer" id="answer-field">
+<input type="hidden" name="timestamp" id="timestamp-field">
+</form>
+<script>
+'use strict';
+// IMAGE FILENAMES: all four assets belong beside this HTML file.
+const ASSETS = {
+  question: {src:'DIDYOU.jpg', alt:'A little reminder: did you eat today?'},
+  YES: {src:'OK.jpg', alt:'OK! Glad you ate today.'},
+  NO: {src:'GOEAT.png', alt:'Abi!, Time to have something to eat.'}
+};
+const form = document.getElementById('response-form');
+const picture = document.getElementById('picture');
+const note = document.getElementById('asset-note');
+const feedback = document.getElementById('feedback');
+const status = document.getElementById('status');
+const retry = document.getElementById('retry');
+const buttons = [...document.querySelectorAll('[data-answer]')];
+let answered = false;
+let sending = false;
+let saved = false;
+picture.addEventListener('error', () => {
+  note.textContent = 'Place ' + picture.getAttribute('src') + ' beside index.html to display this image.';
+  note.hidden = false;
+});
+picture.addEventListener('load', () => { note.hidden = true; });
+function showImage(asset) {
+  note.hidden = true;
+  picture.alt = asset.alt;
+  picture.src = asset.src;
+}
+function resetQuestion() {
+  if (answered) return;
+  showImage(ASSETS.question);
+  feedback.textContent = '—';
+  status.textContent = '';
+}
+picture.addEventListener('dblclick', resetQuestion);
+feedback.addEventListener('click', resetQuestion);
+function closePage() {
+  // Browsers typically permit close() only for tabs opened by a script.
+  try { window.close(); } catch (_) { /* Use the fallback below. */ }
+  window.setTimeout(() => {
+    status.textContent = 'Response saved! Please close this tab manually.';
+    document.body.classList.add('finished');
+  }, 250);
+}
+async function sendAnswer() {
+  if (sending || saved) return;
+  if (form.action.includes('YOUR_FORM_ID')) {
+    status.textContent = 'Not sent: the uikkattan must configure the form endpoint.';
+    return;
+  }
+  sending = true;
+  retry.hidden = true;
+  status.textContent = 'Saving your response…';
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(form.action, {
+      method: form.method.toUpperCase(),
+      body: new FormData(form),
+      headers: {'Accept':'application/json'},
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error('Submission rejected');
+    // Formspree returns JSON with ok:true. Custom providers may differ.
+    const result = await response.json();
+    if (result.ok !== true) throw new Error('Saving was not confirmed');
+    saved = true;
+    status.textContent = 'Response saved! Closing…';
+    window.setTimeout(closePage, 1500);
+  } catch (_) {
+    status.textContent = 'Could not confirm saving. Please retry. A retry may duplicate a response if it already arrived.';
+    retry.hidden = false;
+  } finally {
+    window.clearTimeout(timeout);
+    sending = false;
+  }
+}
+function answer(value) {
+  if (answered) return;
+  answered = true; // Lock synchronously to prevent rapid/double submissions.
+  buttons.forEach(button => { button.disabled = true; });
+  feedback.disabled = true;
+  feedback.textContent = value === 'YES' ? 'OK' : 'GOEAT';
+  showImage(ASSETS[value]);
+  document.getElementById('answer-field').value = value;
+  document.getElementById('timestamp-field').value = new Date().toISOString();
+  void sendAnswer();
+}
+buttons.forEach(button => button.addEventListener('click', () => answer(button.dataset.answer)));
+retry.addEventListener('click', () => { void sendAnswer(); });
+</script>
+<!--
+FORMSPREE SETUP — FIVE STEPS
+1. Create a Formspree account and verify the email that should receive answers.
+2. Create a new form and copy its endpoint: https://formspree.io/f/yourActualID.
+3. Paste that endpoint into the hidden form's action above, replacing YOUR_FORM_ID.
+4. Put DIDYOU.jpg, OK.jpg, GOEAT.png and hellow.jpg beside index.html, then host
+   the folder on any static HTTP(S) host. Filenames are case-sensitive.
+5. Submit a test answer and check the Formspree dashboard/email (including spam).
+   Confirm delivery for YES and NO by reloading between tests. Enable any domain
+   restrictions for your host. Tabs opened normally usually need manual closing.
+-->
+</body>
+</html>
